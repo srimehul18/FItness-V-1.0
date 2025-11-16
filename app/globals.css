@@ -1,0 +1,213 @@
+/* app/globals.css - Tailwind + design tokens + helper utilities */
+
+/* Tailwind directives (required) */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+
+/* Optional third-party CSS for animations: install if you need it:
+   npm install tw-animate-css
+   Then uncomment the next line. */
+/* @import "tw-animate-css"; */
+
+/* ---------- Design tokens ---------- */
+/* keep @custom-variant / @theme commented out because they can break PostCSS builds
+   if you haven't added special PostCSS plugins. Uncomment only if you know those plugins are present. */
+
+/* @custom-variant dark (&:is(.dark *));  <-- commented */
+
+/* Color / spacing tokens */
+:root {
+  --bg: #f6f7fb;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --muted: #e6e9ef;
+  --muted-foreground: #64748b;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: #10b981;
+  --accent: #8b5cf6;
+  --destructive: #ef4444;
+  --border: #e6e9ef;
+  --input: #0f172a;
+  --ring: rgba(59,130,246,0.35);
+  --radius: 14px;
+
+  /* chart palette */
+  --chart-1: #3b82f6;
+  --chart-2: #10b981;
+  --chart-3: #f59e0b;
+  --chart-4: #ef4444;
+  --chart-5: #8b5cf6;
+
+  /* shadows */
+  --shadow-x: 0px;
+  --shadow-y: 18px;
+  --shadow-blur: 30px;
+  --shadow-spread: 0px;
+  --shadow-color: 2,6,23; /* rgb parts */
+  --shadow-opacity: 0.12;
+
+  /* small */
+  --soft-shadow: 0 14px 30px rgba(2,6,23,0.08);
+}
+
+/* Dark theme (comment/uncomment in runtime when toggling) */
+.dark {
+  --bg: #0f172a;
+  --foreground: #f1f5f9;
+  --card: #0f172a;
+  --card-foreground: #f1f5f9;
+  --muted: #1f2937;
+  --muted-foreground: #cbd5e1;
+  --primary: #3b82f6;
+  --accent: #8b5cf6;
+  --border: #111827;
+  --input: #f1f5f9;
+  --ring: rgba(59,130,246,0.2);
+}
+
+/* ---------- Base styles ---------- */
+@layer base {
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: var(--foreground);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* default fonts (you can add Google fonts import in head/layout) */
+  body, input, textarea, select, button {
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  }
+
+  /* small helpers for text tokens used in components */
+  .text-muted-foreground { color: var(--muted-foreground); }
+  .text-card-foreground { color: var(--card-foreground); }
+  .bg-card { background: var(--card); }
+  .bg-muted { background: var(--muted); }
+
+  /* border / ring tokens used by shadcn classes */
+  .border-input { border-color: var(--border); }
+  .outline-ring { outline-color: color-mix(in srgb, var(--ring) 40%, transparent); }
+
+  /* utility: focus ring style that matches tokens */
+  .ring-primary { box-shadow: 0 0 0 4px var(--ring); }
+
+  /* placeholder color helper */
+  .placeholder-muted { color: var(--muted-foreground); }
+}
+
+/* ---------- Shadows & Card styles ---------- */
+/* main card style that looks like v0.app (rounded + big soft shadow) */
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: 0 18px 30px rgba(var(--shadow-color), var(--shadow-opacity)), inset 0 1px 0 rgba(255,255,255,0.6);
+}
+
+/* slightly larger panel used under charts (heavier, soft) */
+.panel {
+  background: var(--card);
+  border-radius: 18px;
+  padding: 22px;
+  box-shadow: 0 30px 60px rgba(var(--shadow-color), calc(var(--shadow-opacity) * 1.1));
+}
+
+/* small raised card */
+.card-sm {
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--card);
+  box-shadow: 0 8px 20px rgba(var(--shadow-color), 0.08);
+}
+
+/* a softer drop-shadow wrapper for big areas */
+.soft-card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0.98));
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: var(--soft-shadow);
+}
+
+/* pill / button gradient used in header */
+.btn-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(90deg, #3b82f6 0%, #6366f1 100%);
+  color: white;
+  padding: 10px 16px;
+  border-radius: 999px;
+  box-shadow: 0 8px 30px rgba(59,130,246,0.18);
+}
+
+/* rounded small metric block */
+.metric-compact {
+  border-radius: 12px;
+  padding: 14px;
+  background: var(--card);
+  box-shadow: 0 10px 30px rgba(var(--shadow-color), 0.08);
+}
+
+/* small utility for top-edge colored stripe in community cards */
+.top-stripe {
+  height: 6px;
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+  margin-bottom: 12px;
+}
+
+/* ---------- CSS helpers mapping token names used by components ---------- */
+/* many components reference classes like .bg-primary, .bg-accent etc. Map them here. */
+.bg-primary { background: var(--primary) !important; color: var(--primary-foreground) !important; }
+.bg-secondary { background: var(--secondary) !important; color: var(--secondary-foreground) !important; }
+.bg-accent { background: var(--accent) !important; color: var(--accent-foreground) !important; }
+.bg-destructive { background: var(--destructive) !important; color: var(--destructive-foreground) !important; }
+
+/* small background tokens for muted areas */
+.bg-muted-100 { background: var(--muted); }
+.text-muted-foreground { color: var(--muted-foreground); }
+
+/* small badge/bg used in shadcn-like badge */
+.badge-muted { background: rgba(99,102,241,0.06); color: #4f46e5; padding: 6px 10px; border-radius: 999px; font-weight:600; font-size:12px; }
+
+/* border helper used in forms */
+.form-field { border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; }
+
+/* small helpers for chips & icons used in metrics */
+.icon-box { width: 44px; height: 44px; border-radius: 10px; display:inline-flex; align-items:center; justify-content:center; }
+
+/* ---------- small custom utilities used by charts/cards ---------- */
+.text-xxs { font-size: 11px; }
+.font-xxl { font-size: 28px; font-weight: 700; }
+.font-xlg { font-size: 20px; font-weight: 700; }
+
+/* ---------- animation helpers (kept simple) ---------- */
+@keyframes subtle-pop {
+  0% { transform: translateY(6px); opacity: 0; } 
+  100% { transform: translateY(0); opacity: 1; }
+}
+.pop-in { animation: subtle-pop 360ms ease-out both; }
+
+/* ---------- small accessibility helpers ---------- */
+.sr-only { position: absolute !important; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+
+/* ---------- keep Tailwind layers for components that still use @apply ---------- */
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors;
+  }
+  .input {
+  @apply block w-full rounded-md border px-3 py-2 text-sm placeholder:text-gray-400;
+}
+
+  }
+
+/* ---------- end of globals.css ---------- */
