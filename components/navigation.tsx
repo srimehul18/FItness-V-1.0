@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React from "react";
+import Logo from "./ui/logo";
 
 const NAV_ITEMS: { href: string; label: string }[] = [
   { href: "/", label: "Home" },
@@ -21,12 +22,16 @@ export default function Navigation(): JSX.Element {
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
         {/* logo + title */}
         <Link href="/" className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center border-2 border-white/25 overflow-hidden">
-            <img src="/avatar.jpg" alt="logo" className="w-8 h-8 object-cover rounded-full" />
+          <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center overflow-hidden shadow-sm">
+            {/* use the React SVG Logo component */}
+            <Logo size={36} />
           </div>
+
           <div>
-            <div className="font-bold text-lg">AthleteHub</div>
-            <div className="text-xs text-muted-foreground">Pro Edition</div>
+            <div className="font-bold text-lg bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent">
+              AthleteHub
+            </div>
+            <div className="text-xs text-gray-500">Pro Edition</div>
           </div>
         </Link>
 
@@ -40,15 +45,14 @@ export default function Navigation(): JSX.Element {
                 href={item.href}
                 className={
                   "px-3 py-2 rounded-full text-sm transition-all duration-200 " +
-                  (isActive
-                    ? "bg-white text-blue-600 shadow-sm"
-                    : "text-muted-foreground hover:bg-white/20")
+                  (isActive ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:bg-white/10")
                 }
               >
                 {item.label}
               </Link>
             );
           })}
+
           {/* a simple call-to-action pill */}
           <Link
             href="/log-workout"
