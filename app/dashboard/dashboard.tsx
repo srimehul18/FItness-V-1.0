@@ -4,7 +4,7 @@ import type React from "react"
 
 import { Activity, Flame, Target, Trophy, Plus, TrendingUp, Zap, Award } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts"
-import { Button } from "../components/ui/button"
+import { Button } from "../../components/ui/button"
 
 const weeklyData = [
   { day: "Mon", distance: 5.2, calories: 520 },
