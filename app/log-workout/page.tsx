@@ -1,3 +1,4 @@
+// app/log-workout/page.tsx
 "use client";
 
 import React, { useState } from "react";
@@ -7,8 +8,9 @@ import { Select } from "../../components/ui/select";
 import { Textarea } from "../../components/ui/textarea";
 import { Button } from "../../components/ui/button";
 import { supabase } from "../../lib/supabaseClient";
+import AuthGuard from "../../components/auth-guard";
 
-export default function LogWorkout() {
+function LogWorkoutContent() {
   const [sportType, setSportType] = useState("Running");
   const [date, setDate] = useState<string>("");
   const [duration, setDuration] = useState<string>("");
@@ -36,7 +38,7 @@ export default function LogWorkout() {
     }
 
     const payload = {
-      user_id: user.id, // 🔥 key line
+      user_id: user.id, // 🔥 associate workout with this user
       sport_type: sportType,
       date: date || new Date().toISOString().slice(0, 10), // YYYY-MM-DD
       duration: duration ? Number(duration) : null,
@@ -150,5 +152,14 @@ export default function LogWorkout() {
         </Button>
       </div>
     </main>
+  );
+}
+
+// Wrap with AuthGuard so only logged-in users can access this page
+export default function LogWorkoutPage() {
+  return (
+    <AuthGuard>
+      <LogWorkoutContent />
+    </AuthGuard>
   );
 }
