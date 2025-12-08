@@ -1,22 +1,19 @@
-/* app/globals.css - Tailwind + design tokens + helper utilities */
 
-/* Tailwind directives (required) */
+
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 
 
-/* Optional third-party CSS for animations: install if you need it:
-   npm install tw-animate-css
-   Then uncomment the next line. */
+
 /* @import "tw-animate-css"; */
 
 /* ---------- Design tokens ---------- */
-/* keep @custom-variant / @theme commented out because they can break PostCSS builds
-   if you haven't added special PostCSS plugins. Uncomment only if you know those plugins are present. */
 
-/* @custom-variant dark (&:is(.dark *));  <-- commented */
+
+
 
 /* Color / spacing tokens */
 :root {

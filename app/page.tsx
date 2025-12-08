@@ -1,112 +1,519 @@
+// app/page.tsx
 "use client";
-import React from "react";
-import Card from "../components/ui/card";
-import MetricCard from "../components/metric-card";
-import ProfileBanner from "../components/profile-banner";
-import CommunityCard from "../components/community-card";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+
+import React, { useEffect, useState } from "react";
+import {
+  Activity,
+  Flame,
+  Target,
+  Trophy,
+  Plus,
+  TrendingUp,
+} from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts";
 import { Button } from "../components/ui/button";
+import { supabase } from "../lib/supabaseClient";
+import AuthGuard from "../components/auth-guard";
 
-const weeklyData = [
-  { name: "Mon", val: 4 },
-  { name: "Tue", val: 6 },
-  { name: "Wed", val: 4 },
-  { name: "Thu", val: 7 },
-  { name: "Fri", val: 8 },
-  { name: "Sat", val: 10 },
-  { name: "Sun", val: 6 }
-];
+type WorkoutRow = {
+  id: string;
+  sport_type: string;
+  date: string;
+  duration: number | null;
+  distance: number | null;
+  calories: number | null;
+  notes?: string | null;
+};
 
-const activity = [
-  { name: "Running", value: 35 },
-  { name: "Gym", value: 30 },
-  { name: "Cycling", value: 20 },
-  { name: "Yoga", value: 15 }
-];
+type WeeklyDataPoint = { day: string; distance: number };
+type SportSlice = { name: string; value: number; color: string };
+type RecentItem = {
+  id: string;
+  type: string;
+  duration: string;
+  distance: string;
+  time: string;
+};
 
-export default function Page() {
+interface StatCardProps {
+  label: string;
+  value: string;
+  icon: React.ReactNode;
+  gradient: string;
+  trend?: string;
+}
+
+function StatCard({ label, value, icon, gradient, trend }: StatCardProps) {
   return (
-    <main className="max-w-7xl mx-auto p-6">
-      <ProfileBanner name="AthleteHub" subtitle="Pro Edition" avatar="/avatar.jpg" />
-
-      <div className="flex items-center justify-between mb-6">
+    <div className="bg-card rounded-xl p-6 premium-shadow border border-border/50 animate-slideInUp hover:border-primary/50 transition-colors">
+      <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-4xl font-extrabold">Welcome Back!</h1>
-          <p className="text-sm text-muted-foreground mt-1">You're crushing it! 7-day streak</p>
+          <p className="text-muted-foreground text-sm mb-2 font-medium">
+            {label}
+          </p>
+          <p className="text-3xl font-bold text-foreground text-balance">
+            {value}
+          </p>
+          {trend && (
+            <p className="text-xs text-secondary mt-2 flex items-center gap-1">
+              <TrendingUp className="w-3 h-3" /> {trend}
+            </p>
+          )}
         </div>
-        <div>
-          <Button className="btn-pill">+ Log Workout</Button>
+        <div
+          className={`w-12 h-12 rounded-lg flex items-center justify-center ${gradient} shadow-lg`}
+        >
+          <div className="text-white">{icon}</div>
         </div>
       </div>
+    </div>
+  );
+}
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <MetricCard title="Total Workouts" value={42} subtitle="+3 this week" accentClass="bg-primary text-white" icon={<div />} />
-        <MetricCard title="Current Streak" value="7 days" subtitle="Keep it up!" accentClass="bg-accent text-white" />
-        <MetricCard title="This Week" value="48.3 km" subtitle="+12% vs last" accentClass="bg-secondary text-white" />
-        <MetricCard title="Calories Burned" value="4,320" subtitle="+8% progress" accentClass="bg-destructive text-white" />
-      </div>
+// “How long ago”
+function formatRelative(dateStr: string): string {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 panel">
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-sm font-medium">Weekly Performance</div>
-            <div className="text-xs text-muted-foreground">Distance tracked daily</div>
+  if (diffDays <= 0) return "Today";
+  if (diffDays === 1) return "1 day ago";
+  if (diffDays < 7) return `${diffDays} days ago`;
+  return d.toLocaleDateString();
+}
+
+// Normalise to YYYY-MM-DD
+function normaliseDate(d: string): string {
+  const date = new Date(d);
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+// ACTIVE streak: consecutive workout days ending today/yesterday
+function computeCurrentStreak(rows: WorkoutRow[]): number {
+  if (!rows.length) return 0;
+
+  const uniqueDays = Array.from(
+    new Set(
+      rows
+        .filter((w) => w.date)
+        .map((w) => normaliseDate(w.date))
+    )
+  ).sort();
+
+  if (!uniqueDays.length) return 0;
+
+  const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+  const todayNorm = normaliseDate(new Date().toISOString());
+  const today = new Date(todayNorm);
+  const lastDay = new Date(uniqueDays[uniqueDays.length - 1]);
+
+  const diffToToday = Math.round(
+    (today.getTime() - lastDay.getTime()) / MS_PER_DAY
+  );
+
+  if (diffToToday > 1) {
+    return 0;
+  }
+
+  let streak = 1;
+
+  for (let i = uniqueDays.length - 1; i > 0; i--) {
+    const d1 = new Date(uniqueDays[i]);
+    const d0 = new Date(uniqueDays[i - 1]);
+    const diffDays = Math.round(
+      (d1.getTime() - d0.getTime()) / MS_PER_DAY
+    );
+
+    if (diffDays <= 0) continue;
+    if (diffDays === 1) streak += 1;
+    else break;
+  }
+
+  return streak;
+}
+
+// ---------- MAIN DASHBOARD CONTENT (requires auth) ----------
+function HomeContent() {
+  const [weeklyData, setWeeklyData] = useState<WeeklyDataPoint[]>([]);
+  const [sportDistribution, setSportDistribution] = useState<SportSlice[]>([]);
+  const [recentActivity, setRecentActivity] = useState<RecentItem[]>([]);
+  const [totalWorkouts, setTotalWorkouts] = useState(0);
+  const [totalDistance, setTotalDistance] = useState(0);
+  const [caloriesBurned, setCaloriesBurned] = useState(0);
+  const [currentStreak, setCurrentStreak] = useState(0);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError || !user) {
+          throw new Error("Not logged in");
+        }
+
+        const { data, error } = await supabase
+          .from("workouts")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("date", { ascending: false })
+          .limit(50);
+
+        console.log("SUPABASE WORKOUTS:", { data, error });
+
+        if (error) throw error;
+        const workouts = (data || []) as WorkoutRow[];
+
+        // 🔥 compute active streak
+        const streak = computeCurrentStreak(workouts);
+        setCurrentStreak(streak);
+
+        // totals
+        setTotalWorkouts(workouts.length);
+        setTotalDistance(
+          workouts.reduce((s, w) => s + (w.distance || 0), 0)
+        );
+        setCaloriesBurned(
+          workouts.reduce((s, w) => s + (w.calories || 0), 0)
+        );
+
+        // weekly data (last 7 days)
+        const now = new Date();
+        const sevenDaysAgo = new Date(
+          now.getTime() - 7 * 24 * 60 * 60 * 1000
+        );
+        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const map: Record<string, number> = {};
+        days.forEach((d) => (map[d] = 0));
+
+        workouts.forEach((w) => {
+          const d = new Date(w.date);
+          if (d >= sevenDaysAgo && d <= now) {
+            const label = days[d.getDay()];
+            map[label] += w.distance || 0;
+          }
+        });
+
+        setWeeklyData(
+          days.map((d) => ({
+            day: d,
+            distance: Number(map[d].toFixed(1)),
+          }))
+        );
+
+        // sports distribution
+        const colors = [
+          "#3b82f6",
+          "#10b981",
+          "#f59e0b",
+          "#8b5cf6",
+          "#ef4444",
+        ];
+        const sportMap: Record<string, number> = {};
+        workouts.forEach((w) => {
+          if (!w.sport_type) return;
+          sportMap[w.sport_type] = (sportMap[w.sport_type] || 0) + 1;
+        });
+        setSportDistribution(
+          Object.entries(sportMap).map(([name, value], idx) => ({
+            name,
+            value,
+            color: colors[idx % colors.length],
+          }))
+        );
+
+        // recent list
+        setRecentActivity(
+          workouts.slice(0, 3).map((w) => ({
+            id: w.id,
+            type: w.sport_type || "Workout",
+            duration: w.duration ? `${w.duration} min` : "-",
+            distance:
+              w.distance != null ? `${w.distance.toFixed(1)} km` : "—",
+            time: formatRelative(w.date),
+          }))
+        );
+      } catch (err: any) {
+        console.error(err);
+        setError(err.message || "Failed to load stats");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadData();
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="max-w-7xl mx-auto px-4 py-8 space-y-8 animate-fadeIn">
+        {/* header */}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-5xl font-bold text-foreground mb-3">
+              Welcome Back!
+            </h1>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-secondary rounded-full" />
+              <p className="text-lg text-muted-foreground font-medium">
+                {totalWorkouts > 0
+                  ? "You're crushing it! Keep logging your sessions."
+                  : "Start by logging your first workout today."}
+              </p>
+            </div>
+            {error && (
+              <p className="mt-2 text-sm text-red-500">
+                Failed to load stats: {error}
+              </p>
+            )}
           </div>
-          <div style={{ height: 320 }}>
-            <ResponsiveContainer width="100%" height="100%">
+
+          <Button
+            className="gap-2 whitespace-nowrap bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg"
+            size="lg"
+            onClick={() => (window.location.href = "/log-workout")}
+          >
+            <Plus className="w-5 h-5" />
+            <span className="hidden sm:inline">Log Workout</span>
+          </Button>
+        </div>
+
+        {/* stat cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            label="Total Workouts"
+            value={loading ? "…" : `${totalWorkouts}`}
+            icon={<Activity className="w-6 h-6" />}
+            gradient="bg-gradient-to-br from-blue-400 to-blue-600"
+            trend={totalWorkouts ? "+ nice consistency" : "Log your first one!"}
+          />
+          <StatCard
+            label="Current Streak"
+            value={
+              loading
+                ? "…"
+                : `${currentStreak} ${
+                    currentStreak === 1 ? "day" : "days"
+                  }`
+            }
+            icon={<Trophy className="w-6 h-6" />}
+            gradient="bg-gradient-to-br from-yellow-400 to-orange-600"
+            trend={
+              loading
+                ? undefined
+                : currentStreak > 0
+                ? "Nice consistency – keep it going!"
+                : "No active streak yet. Log a workout today."
+            }
+          />
+
+          <StatCard
+            label="Total Distance"
+            value={loading ? "…" : `${totalDistance.toFixed(1)} km`}
+            icon={<Target className="w-6 h-6" />}
+            gradient="bg-gradient-to-br from-green-400 to-emerald-600"
+            trend="based on logged runs"
+          />
+          <StatCard
+            label="Calories Burned"
+            value={loading ? "…" : `${caloriesBurned.toFixed(0)}`}
+            icon={<Flame className="w-6 h-6" />}
+            gradient="bg-gradient-to-br from-red-400 to-pink-600"
+            trend="total across all workouts"
+          />
+        </div>
+
+        {/* charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 bg-card rounded-xl p-6 premium-shadow border border-border/50 animate-slideInUp">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-lg font-bold text-foreground">
+                  Weekly Performance
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Distance tracked daily (last 7 days)
+                </p>
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={300}>
               <BarChart data={weeklyData}>
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="val" fill="#3b82f6" radius={[6, 6, 0, 0]} />
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="var(--color-border)"
+                />
+                <XAxis
+                  dataKey="day"
+                  stroke="var(--color-muted-foreground)"
+                  style={{ fontSize: "12px" }}
+                />
+                <YAxis
+                  stroke="var(--color-muted-foreground)"
+                  style={{ fontSize: "12px" }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--color-card)",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: "8px",
+                  }}
+                />
+                <Bar
+                  dataKey="distance"
+                  fill="url(#colorGradient)"
+                  radius={[8, 8, 0, 0]}
+                />
+                <defs>
+                  <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop
+                      offset="0%"
+                      stopColor="var(--color-primary)"
+                      stopOpacity={1}
+                    />
+                    <stop
+                      offset="100%"
+                      stopColor="var(--color-primary)"
+                      stopOpacity={0.3}
+                    />
+                  </linearGradient>
+                </defs>
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </Card>
 
-        <Card className="panel">
-          <div className="text-sm font-medium mb-2">Activity Breakdown</div>
-          <div style={{ height: 320 }}>
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="bg-card rounded-xl p-6 premium-shadow border border-border/50 animate-slideInUp">
+            <h2 className="text-lg font-bold text-foreground mb-4">
+              Activity Breakdown
+            </h2>
+            <ResponsiveContainer width="100%" height={250}>
               <PieChart>
-                <Pie data={activity} dataKey="value" nameKey="name" outerRadius={90} innerRadius={50} paddingAngle={6}>
-                  {activity.map((entry, idx) => <Cell key={idx} fill={["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6"][idx]} />)}
+                <Pie
+                  data={sportDistribution}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={90}
+                  paddingAngle={2}
+                  dataKey="value"
+                >
+                  {sportDistribution.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
                 </Pie>
               </PieChart>
             </ResponsiveContainer>
+            <div className="mt-4 space-y-2">
+              {sportDistribution.map((sport) => (
+                <div
+                  key={sport.name}
+                  className="flex items-center justify-between text-sm"
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: sport.color }}
+                    />
+                    <span className="text-muted-foreground">{sport.name}</span>
+                  </div>
+                  <span className="font-semibold text-foreground">
+                    {sport.value}
+                  </span>
+                </div>
+              ))}
+              {sportDistribution.length === 0 && !loading && (
+                <p className="text-xs text-muted-foreground">
+                  No workouts yet – log one to see the breakdown.
+                </p>
+              )}
+            </div>
           </div>
-        </Card>
+        </div>
+
+        {/* recent activity */}
+        <div className="bg-card rounded-xl p-6 premium-shadow border border-border/50 animate-slideInUp">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-lg font-bold text-foreground">
+                Recent Activity
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Your latest workouts
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-lg bg-transparent"
+            >
+              View All
+            </Button>
+          </div>
+          <div className="space-y-3">
+            {recentActivity.map((activity) => (
+              <div
+                key={activity.id}
+                className="flex items-center justify-between p-4 rounded-xl border border-border/50 hover:bg-muted/30 hover:border-primary/50 transition-all duration-300"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-gradient-to-br from-blue-400 to-blue-600 shadow-lg">
+                    <Activity className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-foreground">
+                      {activity.type}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {activity.duration} • {activity.distance}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground whitespace-nowrap ml-4 font-medium">
+                  {activity.time}
+                </p>
+              </div>
+            ))}
+            {recentActivity.length === 0 && !loading && (
+              <p className="text-sm text-muted-foreground">
+                No workouts logged yet. Start by adding one from the “Log
+                Workout” page.
+              </p>
+            )}
+          </div>
+        </div>
       </div>
+    </div>
+  );
+}
 
-      <Card className="mt-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="text-lg font-semibold">Recent Activity</div>
-          <div className="text-sm text-muted-foreground">Your latest workouts</div>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between p-4 bg-white rounded-xl shadow-sm">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center">🏃</div>
-              <div>
-                <div className="font-semibold">Running</div>
-                <div className="text-sm text-muted-foreground">45 min • 8.1 km</div>
-              </div>
-            </div>
-            <div className="text-sm text-muted-foreground">2 hours ago</div>
-          </div>
-          <div className="flex items-center justify-between p-4 bg-white rounded-xl shadow-sm">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-lg bg-orange-50 flex items-center justify-center">🏋️</div>
-              <div>
-                <div className="font-semibold">Strength Training</div>
-                <div className="text-sm text-muted-foreground">60 min • 4 sets</div>
-              </div>
-            </div>
-            <div className="text-sm text-muted-foreground">1 day ago</div>
-          </div>
-        </div>
-      </Card>
-    </main>
+// ---------- ROUTE EXPORT: wraps with AuthGuard ----------
+export default function HomePage() {
+  return (
+    <AuthGuard>
+      <HomeContent />
+    </AuthGuard>
   );
 }

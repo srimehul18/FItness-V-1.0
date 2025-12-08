@@ -1,11 +1,15 @@
-﻿"use client"
+﻿"use client";
 
-import type React from "react"
-
-import { useState } from "react"
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  LineChart,
-  Line,
+  Activity,
+  Flame,
+  Target,
+  BarChart3,
+  ArrowUpRight,
+  ArrowDownRight,
+} from "lucide-react";
+import {
   AreaChart,
   Area,
   XAxis,
@@ -13,237 +17,526 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  BarChart,
+  LineChart,
+  Line,
+  BarChart as ReBarChart,
   Bar,
-} from "recharts"
-import { TrendingUp, Award, Target, Flame } from "lucide-react"
-import { Button } from "../../components/ui/button"
+} from "recharts";
 
-const monthlyData = [
-  { month: "Jan", distance: 85, calories: 8500, workouts: 12 },
-  { month: "Feb", distance: 92, calories: 9200, workouts: 13 },
-  { month: "Mar", distance: 110, calories: 11000, workouts: 15 },
-  { month: "Apr", distance: 128, calories: 12800, workouts: 17 },
-  { month: "May", distance: 145, calories: 14500, workouts: 18 },
-  { month: "Jun", distance: 162, calories: 16200, workouts: 20 },
-]
+import { Button } from "../../components/ui/button";
+import AuthGuard from "../../components/auth-guard";
+import { supabase } from "../../lib/supabaseClient";
+
+type WorkoutRow = {
+  id: string;
+  // make sure this matches your column name in Supabase (change if needed)
+  date: string;
+  distance: number | null;
+  calories: number | null;
+};
+
+type Growth =
+  | {
+      percent: number;
+      label: string;
+      isPositive: boolean;
+    }
+  | null;
 
 interface StatCardProps {
-  label: string
-  value: string
-  change: string
-  icon: React.ReactNode
-  gradient: string
+  label: string;
+  value: string;
+  gradient: string;
+  growth: Growth;
+  icon: React.ReactNode;
 }
 
-function StatCard({ label, value, change, icon, gradient }: StatCardProps) {
+function formatPercent(p: number) {
+  if (!Number.isFinite(p)) return "0%";
+  const abs = Math.abs(p);
+  if (abs >= 100) return `${p > 0 ? "+" : "-"}${abs.toFixed(0)}%`;
+  return `${p > 0 ? "+" : p < 0 ? "-" : ""}${abs.toFixed(1)}%`;
+}
+
+function StatCard({ label, value, gradient, growth, icon }: StatCardProps) {
   return (
-    <div
-      className={`bg-gradient-to-br ${gradient} rounded-xl p-6 premium-shadow border border-white/10 text-white animate-slideInUp`}
-    >
-      <div className="flex items-start justify-between mb-4">
-        <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-white/20 backdrop-blur-sm">{icon}</div>
-        <span className="text-xs font-bold px-3 py-1 rounded-full bg-white/20 backdrop-blur-sm">{change}</span>
+    <div className="rounded-2xl p-5 bg-gradient-to-br from-slate-900/5 to-slate-900/0 shadow-lg border border-white/40 backdrop-blur-md">
+      <div className="flex items-center justify-between mb-4">
+        <div
+          className={`w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br ${gradient} shadow-md`}
+        >
+          <span className="text-white">{icon}</span>
+        </div>
+        {growth && (
+          <div
+            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
+              growth.isPositive
+                ? "bg-emerald-500/10 text-emerald-500"
+                : "bg-rose-500/10 text-rose-500"
+            }`}
+          >
+            {growth.isPositive ? (
+              <ArrowUpRight className="w-3 h-3" />
+            ) : (
+              <ArrowDownRight className="w-3 h-3" />
+            )}
+            <span>{formatPercent(growth.percent)}</span>
+          </div>
+        )}
       </div>
-      <p className="text-white/80 text-sm mb-1 font-medium">{label}</p>
-      <p className="text-3xl font-bold">{value}</p>
+      <p className="text-xs font-medium text-slate-500">{label}</p>
+      <p className="mt-2 text-2xl font-bold text-slate-900">{value}</p>
+      {growth && (
+        <p className="mt-1 text-[11px] text-slate-500">{growth.label}</p>
+      )}
     </div>
-  )
+  );
 }
 
-export default function Progress() {
-  const [timeRange, setTimeRange] = useState<"3m" | "6m" | "1y">("6m")
+function ProgressContent() {
+  const [workouts, setWorkouts] = useState<WorkoutRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+
+      // uses the shared supabase client (already authenticated by AuthGuard)
+      const {
+  data: { user },
+  error: userError,
+} = await supabase.auth.getUser();
+
+if (userError || !user) {
+  throw new Error("Not logged in");
+}
+
+const { data, error } = await supabase
+  .from("workouts")
+  .select("*")
+  .eq("user_id", user.id)      // 🔥 filter by user
+  .order("date", { ascending: false })
+  .limit(50);
+
+
+      if (error) {
+        console.error("Error loading workouts for progress page:", error);
+      } else if (data) {
+        setWorkouts(data as WorkoutRow[]);
+      }
+      setLoading(false);
+    }
+
+    load();
+  }, []);
+
+  const stats = useMemo(() => {
+    if (!workouts.length) {
+      return {
+        totalDistance: 0,
+        totalCalories: 0,
+        totalWorkouts: 0,
+        avgPerWeek: 0,
+        monthly: [] as {
+          key: string;
+          label: string;
+          distance: number;
+          calories: number;
+          count: number;
+        }[],
+        growthDistance: null as Growth,
+        growthCalories: null as Growth,
+        growthWorkouts: null as Growth,
+        bestMonth: "—",
+        bestMonthDistance: 0,
+        avgPerWorkout: 0,
+        personalBestDistance: 0,
+      };
+    }
+
+    let totalDistance = 0;
+    let totalCalories = 0;
+    const monthlyMap = new Map<
+      string,
+      { label: string; distance: number; calories: number; count: number }
+    >();
+
+    let firstDate: Date | null = null;
+    let lastDate: Date | null = null;
+    let personalBestDistance = 0;
+
+    for (const w of workouts) {
+      const distance = w.distance ?? 0;
+      const calories = w.calories ?? 0;
+
+      totalDistance += distance;
+      totalCalories += calories;
+      personalBestDistance = Math.max(personalBestDistance, distance);
+
+      const d = new Date(w.date);
+      if (!firstDate || d < firstDate) firstDate = d;
+      if (!lastDate || d > lastDate) lastDate = d;
+
+      const year = d.getFullYear();
+      const monthIdx = d.getMonth(); // 0..11
+      const key = `${year}-${monthIdx}`;
+      const label = d.toLocaleDateString(undefined, {
+        month: "short",
+      });
+
+      const existing = monthlyMap.get(key);
+      if (existing) {
+        existing.distance += distance;
+        existing.calories += calories;
+        existing.count += 1;
+      } else {
+        monthlyMap.set(key, {
+          label,
+          distance,
+          calories,
+          count: 1,
+        });
+      }
+    }
+
+    const monthly = Array.from(monthlyMap.entries())
+      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+      .map(([key, value]) => ({ key, ...value }))
+      .slice(-6); // last 6 months
+
+    const totalWorkouts = workouts.length;
+
+    // --- Growth vs last month ---
+    const len = monthly.length;
+    const current = len >= 1 ? monthly[len - 1] : null;
+    const previous = len >= 2 ? monthly[len - 2] : null;
+
+    const makeGrowth = (
+      currentValue: number,
+      previousValue: number,
+      label: string
+    ): Growth => {
+      if (!previous) return null;
+      const base = previousValue || 1; // avoid /0
+      const percent = ((currentValue - previousValue) / base) * 100;
+      return {
+        percent,
+        label,
+        isPositive: percent >= 0,
+      };
+    };
+
+    const growthDistance =
+      current && previous
+        ? makeGrowth(current.distance, previous.distance, "vs last month")
+        : null;
+    const growthCalories =
+      current && previous
+        ? makeGrowth(current.calories, previous.calories, "vs last month")
+        : null;
+    const growthWorkouts =
+      current && previous
+        ? makeGrowth(current.count, previous.count, "vs last month")
+        : null;
+
+    // --- Avg per week ---
+    let avgPerWeek = 0;
+    if (firstDate && lastDate) {
+      const diffDays =
+        (lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24);
+      const weeks = Math.max(diffDays / 7, 1);
+      avgPerWeek = totalDistance / weeks;
+    }
+
+    // --- Insights ---
+    let bestMonth = "—";
+    let bestMonthDistance = 0;
+    for (const m of monthly) {
+      if (m.distance > bestMonthDistance) {
+        bestMonthDistance = m.distance;
+        bestMonth = m.label;
+      }
+    }
+
+    const avgPerWorkout =
+      totalWorkouts > 0 ? totalDistance / totalWorkouts : 0;
+
+    return {
+      totalDistance,
+      totalCalories,
+      totalWorkouts,
+      avgPerWeek,
+      monthly,
+      growthDistance,
+      growthCalories,
+      growthWorkouts,
+      bestMonth,
+      bestMonthDistance,
+      avgPerWorkout,
+      personalBestDistance,
+    };
+  }, [workouts]);
+
+  const distanceData = stats.monthly.map((m) => ({
+    month: m.label,
+    distance: Number(m.distance.toFixed(1)),
+  }));
+
+  const caloriesData = stats.monthly.map((m) => ({
+    month: m.label,
+    calories: Math.round(m.calories),
+  }));
+
+  const workoutsData = stats.monthly.map((m) => ({
+    month: m.label,
+    count: m.count,
+  }));
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-4 py-8 space-y-8 animate-fadeIn">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-5xl font-bold text-foreground mb-3">Your Progress</h1>
-            <p className="text-lg text-muted-foreground flex items-center gap-2">
-              <Flame className="w-5 h-5 text-secondary" />
-              Track your improvement and celebrate milestones
+            <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-2">
+              Your Progress
+            </h1>
+            <p className="text-slate-500">
+              Track your improvement and celebrate milestones.
             </p>
           </div>
-          <div className="flex gap-2 p-1 bg-muted rounded-lg border border-border/50">
-            {(["3m", "6m", "1y"] as const).map((range) => (
-              <Button
-                key={range}
-                variant={timeRange === range ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setTimeRange(range)}
-                className={`rounded-md ${timeRange === range ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg" : "text-muted-foreground"}`}
-              >
-                {range === "3m" ? "3M" : range === "6m" ? "6M" : "1Y"}
-              </Button>
-            ))}
-          </div>
+          <Button
+            className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg rounded-full px-5"
+            size="lg"
+          >
+            <Activity className="w-4 h-4 mr-2" />
+            Log Workout
+          </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Top stat cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           <StatCard
             label="Total Distance"
-            value="162 km"
-            change="+90.6%"
-            icon={<Target className="w-6 h-6" />}
-            gradient="from-blue-400 to-blue-600"
+            value={`${stats.totalDistance.toFixed(1)} km`}
+            gradient="from-blue-500 to-indigo-500"
+            growth={stats.growthDistance}
+            icon={<Target className="w-5 h-5" />}
           />
           <StatCard
             label="Calories Burned"
-            value="16.2k"
-            change="+90.6%"
-            icon={<Flame className="w-6 h-6" />}
-            gradient="from-orange-400 to-red-600"
+            value={`${Math.round(stats.totalCalories).toLocaleString()} kcal`}
+            gradient="from-orange-500 to-red-500"
+            growth={stats.growthCalories}
+            icon={<Flame className="w-5 h-5" />}
           />
           <StatCard
             label="Total Workouts"
-            value="120"
-            change="+66.7%"
-            icon={<Award className="w-6 h-6" />}
-            gradient="from-purple-400 to-purple-600"
+            value={stats.totalWorkouts.toString()}
+            gradient="from-purple-500 to-pink-500"
+            growth={stats.growthWorkouts}
+            icon={<BarChart3 className="w-5 h-5" />}
           />
           <StatCard
-            label="Avg. Per Week"
-            value="5.2 km"
-            change="+12.5%"
-            icon={<TrendingUp className="w-6 h-6" />}
-            gradient="from-green-400 to-emerald-600"
+            label="Avg. Distance / Week"
+            value={`${stats.avgPerWeek.toFixed(1)} km`}
+            gradient="from-emerald-500 to-teal-500"
+            growth={null}
+            icon={<Activity className="w-5 h-5" />}
           />
         </div>
 
-        <div className="bg-card rounded-xl border border-border/50 p-6 premium-shadow animate-slideInUp">
-          <div className="flex items-center justify-between mb-6">
+        {/* Big distance chart */}
+        <div className="bg-card rounded-2xl p-6 shadow-lg border border-slate-200">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-2xl font-bold text-foreground">Total Distance (km)</h2>
-              <p className="text-sm text-muted-foreground mt-2">Steady progress towards your goals</p>
+              <h2 className="text-lg font-semibold text-slate-900">
+                Total Distance (km)
+              </h2>
+              <p className="text-xs text-slate-500">
+                Steady progress towards your goals
+              </p>
             </div>
-            <div className="text-right bg-gradient-to-r from-blue-500/10 to-blue-600/10 px-4 py-3 rounded-lg border border-blue-200/50 dark:border-blue-800/50">
-              <p className="text-2xl font-bold text-primary">162 km</p>
-              <p className="text-sm text-secondary">+90.6% growth</p>
+            <div className="text-right">
+              <p className="text-xs text-slate-400">This period</p>
+              <p className="text-lg font-semibold text-slate-900">
+                {stats.totalDistance.toFixed(1)} km
+              </p>
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={monthlyData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="colorDistance" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.4} />
-                  <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-              <XAxis dataKey="month" stroke="var(--color-muted-foreground)" style={{ fontSize: "12px" }} />
-              <YAxis stroke="var(--color-muted-foreground)" style={{ fontSize: "12px" }} />
-              <Tooltip
-                contentStyle={{
-                  background: "var(--color-card)",
-                  border: "1px solid var(--color-border)",
-                  borderRadius: "8px",
-                }}
-                formatter={(value) => `${value} km`}
-              />
-              <Area
-                type="monotone"
-                dataKey="distance"
-                stroke="var(--color-primary)"
-                strokeWidth={3}
-                fillOpacity={1}
-                fill="url(#colorDistance)"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Calories Progress */}
-          <div className="bg-card rounded-xl border border-border/50 p-6 premium-shadow animate-slideInUp">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-xl font-bold text-foreground">Calories Burned</h2>
-                <p className="text-sm text-muted-foreground mt-1">Monthly trend</p>
-              </div>
-              <div className="text-right bg-gradient-to-r from-orange-500/10 to-red-600/10 px-4 py-3 rounded-lg border border-orange-200/50 dark:border-orange-800/50">
-                <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">16.2k</p>
-                <p className="text-xs text-muted-foreground">This period</p>
-              </div>
-            </div>
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={monthlyData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                <XAxis dataKey="month" stroke="var(--color-muted-foreground)" style={{ fontSize: "12px" }} />
-                <YAxis stroke="var(--color-muted-foreground)" style={{ fontSize: "12px" }} />
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={distanceData}>
+                <defs>
+                  <linearGradient id="distanceGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.9} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="month" stroke="#9ca3af" />
+                <YAxis stroke="#9ca3af" />
                 <Tooltip
                   contentStyle={{
-                    background: "var(--color-card)",
-                    border: "1px solid var(--color-border)",
-                    borderRadius: "8px",
+                    backgroundColor: "white",
+                    borderRadius: 12,
+                    border: "1px solid #e5e7eb",
+                    fontSize: 12,
                   }}
-                  formatter={(value) => `${value} kcal`}
                 />
-                <Line
+                <Area
                   type="monotone"
-                  dataKey="calories"
-                  stroke="var(--color-secondary)"
+                  dataKey="distance"
+                  stroke="#2563eb"
                   strokeWidth={3}
-                  dot={{ fill: "var(--color-secondary)", r: 5 }}
-                  activeDot={{ r: 7 }}
+                  fill="url(#distanceGradient)"
+                  dot={{ r: 4 }}
+                  activeDot={{ r: 6 }}
                 />
-              </LineChart>
+              </AreaChart>
             </ResponsiveContainer>
           </div>
+        </div>
 
-          {/* Workouts Per Month */}
-          <div className="bg-card rounded-xl border border-border/50 p-6 premium-shadow animate-slideInUp">
-            <div className="flex items-center justify-between mb-6">
+        {/* Lower charts row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Calories chart */}
+          <div className="bg-card rounded-2xl p-6 shadow-lg border border-slate-200">
+            <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-xl font-bold text-foreground">Workouts Per Month</h2>
-                <p className="text-sm text-muted-foreground mt-1">Consistency tracking</p>
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Calories Burned
+                </h2>
+                <p className="text-xs text-slate-500">Monthly trend</p>
               </div>
-              <div className="text-right bg-gradient-to-r from-purple-500/10 to-purple-600/10 px-4 py-3 rounded-lg border border-purple-200/50 dark:border-purple-800/50">
-                <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">120</p>
-                <p className="text-xs text-muted-foreground">Total workouts</p>
+              <div className="text-right">
+                <p className="text-xs text-slate-400">This period</p>
+                <p className="text-lg font-semibold text-orange-500">
+                  {Math.round(stats.totalCalories).toLocaleString()} kcal
+                </p>
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={monthlyData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                <XAxis dataKey="month" stroke="var(--color-muted-foreground)" style={{ fontSize: "12px" }} />
-                <YAxis stroke="var(--color-muted-foreground)" style={{ fontSize: "12px" }} />
-                <Tooltip
-                  contentStyle={{
-                    background: "var(--color-card)",
-                    border: "1px solid var(--color-border)",
-                    borderRadius: "8px",
-                  }}
-                  formatter={(value) => `${value} workouts`}
-                />
-                <Bar dataKey="workouts" fill="var(--color-accent)" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={caloriesData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="month" stroke="#9ca3af" />
+                  <YAxis stroke="#9ca3af" />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "white",
+                      borderRadius: 12,
+                      border: "1px solid #e5e7eb",
+                      fontSize: 12,
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="calories"
+                    stroke="#f97316"
+                    strokeWidth={3}
+                    dot={{ r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Workouts per month */}
+          <div className="bg-card rounded-2xl p-6 shadow-lg border border-slate-200">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Workouts Per Month
+                </h2>
+                <p className="text-xs text-slate-500">Consistency tracking</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-slate-400">Total workouts</p>
+                <p className="text-lg font-semibold text-purple-500">
+                  {stats.totalWorkouts}
+                </p>
+              </div>
+            </div>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <ReBarChart data={workoutsData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="month" stroke="#9ca3af" />
+                  <YAxis stroke="#9ca3af" allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "white",
+                      borderRadius: 12,
+                      border: "1px solid #e5e7eb",
+                      fontSize: 12,
+                    }}
+                  />
+                  <Bar dataKey="count" fill="#111827" radius={[8, 8, 4, 4]} />
+                </ReBarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
 
-        <div className="bg-card rounded-xl border border-border/50 p-6 premium-shadow animate-slideInUp">
-          <h2 className="text-2xl font-bold text-foreground mb-6">Key Insights</h2>
+        {/* Key insights */}
+        <div className="bg-card rounded-2xl p-6 shadow-lg border border-slate-200">
+          <h2 className="text-lg font-semibold text-slate-900 mb-4">
+            Key Insights
+          </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-gradient-to-br from-blue-500/10 to-blue-600/10 rounded-xl p-6 border border-blue-200/50 dark:border-blue-800/50 hover:border-blue-400/50 transition-colors">
-              <p className="text-sm font-semibold text-foreground mb-2">Best Month</p>
-              <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">June</p>
-              <p className="text-xs text-muted-foreground mt-3">162 km with 20 workouts</p>
+            <div className="rounded-xl bg-blue-50 p-4 border border-blue-100">
+              <p className="text-xs font-semibold text-blue-700 mb-1">
+                Best Month
+              </p>
+              <p className="text-lg font-bold text-blue-900">
+                {stats.bestMonth}
+              </p>
+              <p className="text-xs text-blue-600 mt-1">
+                {stats.bestMonthDistance.toFixed(1)} km in your top month
+              </p>
             </div>
-            <div className="bg-gradient-to-br from-green-500/10 to-emerald-600/10 rounded-xl p-6 border border-green-200/50 dark:border-green-800/50 hover:border-green-400/50 transition-colors">
-              <p className="text-sm font-semibold text-foreground mb-2">Average per Workout</p>
-              <p className="text-3xl font-bold text-green-600 dark:text-green-400">7.4 km</p>
-              <p className="text-xs text-muted-foreground mt-3">Consistent improvement</p>
+            <div className="rounded-xl bg-emerald-50 p-4 border border-emerald-100">
+              <p className="text-xs font-semibold text-emerald-700 mb-1">
+                Average per Workout
+              </p>
+              <p className="text-lg font-bold text-emerald-900">
+                {stats.avgPerWorkout.toFixed(1)} km
+              </p>
+              <p className="text-xs text-emerald-600 mt-1">
+                Distance covered each session on average
+              </p>
             </div>
-            <div className="bg-gradient-to-br from-purple-500/10 to-purple-600/10 rounded-xl p-6 border border-purple-200/50 dark:border-purple-800/50 hover:border-purple-400/50 transition-colors">
-              <p className="text-sm font-semibold text-foreground mb-2">Personal Best</p>
-              <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">20</p>
-              <p className="text-xs text-muted-foreground mt-3">Workouts in a month</p>
+            <div className="rounded-xl bg-purple-50 p-4 border border-purple-100">
+              <p className="text-xs font-semibold text-purple-700 mb-1">
+                Personal Best
+              </p>
+              <p className="text-lg font-bold text-purple-900">
+                {stats.personalBestDistance.toFixed(1)} km
+              </p>
+              <p className="text-xs text-purple-600 mt-1">
+                Your longest recorded workout in one session
+              </p>
             </div>
           </div>
         </div>
+
+        {loading && (
+          <p className="text-xs text-slate-400 text-center">
+            Loading your progress…
+          </p>
+        )}
       </div>
     </div>
-  )
+  );
 }
 
+// 👇 This is what actually gets exported for the /progress route
+export default function ProgressPage() {
+  return (
+    <AuthGuard>
+      <ProgressContent />
+    </AuthGuard>
+  );
+}

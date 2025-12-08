@@ -1,39 +1,84 @@
 ﻿// components/ui/badge.tsx
+"use client";
+
 import React from "react";
 
-type BadgeProps = {
+type BadgeColor = "blue" | "yellow" | "purple" | "pink";
+
+interface BadgeCardProps {
   title: string;
-  subtitle?: string;
-  color?: "blue" | "yellow" | "purple" | "pink" | "green";
+  subtitle: string;
+  color: BadgeColor;
+  /** when true, badge is greyed out and shows "Locked" */
+  locked?: boolean;
+}
+
+const COLOR_MAP: Record<
+  BadgeColor,
+  { gradient: string; shadow: string }
+> = {
+  blue: {
+    gradient: "from-blue-500 to-indigo-500",
+    shadow: "shadow-blue-200/60",
+  },
+  yellow: {
+    gradient: "from-amber-400 to-orange-500",
+    shadow: "shadow-amber-200/60",
+  },
+  purple: {
+    gradient: "from-violet-500 to-fuchsia-500",
+    shadow: "shadow-violet-200/60",
+  },
+  pink: {
+    gradient: "from-rose-500 to-pink-500",
+    shadow: "shadow-rose-200/60",
+  },
 };
 
-const GRADIENTS: Record<string, string> = {
-  blue: "bg-gradient-to-r from-blue-400 to-blue-600",
-  yellow: "bg-gradient-to-r from-yellow-400 to-orange-400",
-  purple: "bg-gradient-to-r from-indigo-500 to-purple-500",
-  pink: "bg-gradient-to-r from-pink-400 to-rose-500",
-  green: "bg-gradient-to-r from-emerald-400 to-green-600",
-};
+export default function BadgeCard({
+  title,
+  subtitle,
+  color,
+  locked = false,
+}: BadgeCardProps) {
+  const theme = COLOR_MAP[color];
 
-export default function BadgeCard({ title, subtitle = "", color = "blue" }: BadgeProps) {
-  const grad = GRADIENTS[color] ?? GRADIENTS.blue;
+  const headerClasses = locked
+    ? "bg-gradient-to-r from-gray-200 to-gray-300 text-gray-600"
+    : `bg-gradient-to-r ${theme.gradient} text-white`;
+
+  const earnedPillClasses = locked
+    ? "bg-white/60 text-gray-600 border-gray-300"
+    : "bg-white/15 text-white border-white/60";
 
   return (
-    <div className="rounded-xl shadow-2xl overflow-hidden">
-      <div className={`p-4 ${grad} text-white`}>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-lg font-semibold leading-snug">{title}</div>
-            {subtitle && <div className="text-sm opacity-90 mt-1">{subtitle}</div>}
-          </div>
-          <div className="ml-auto self-start">
-            <span className="inline-block bg-white/20 text-white text-xs px-2 py-1 rounded-full font-medium">Earned</span>
-          </div>
+    <div className="rounded-2xl bg-white shadow-lg shadow-black/5 overflow-hidden">
+      {/* Top coloured (or greyed) part */}
+      <div
+        className={`px-5 py-4 flex items-center justify-between ${headerClasses} ${
+          locked ? "grayscale" : ""
+        }`}
+      >
+        <div>
+          <p className="text-lg font-semibold">{title}</p>
+          <p
+            className={`text-sm ${
+              locked ? "text-gray-700" : "text-white/90"
+            }`}
+          >
+            {subtitle}
+          </p>
         </div>
+        <span
+          className={`text-xs font-semibold px-3 py-1 rounded-full border ${earnedPillClasses}`}
+        >
+          {locked ? "Locked" : "Earned"}
+        </span>
       </div>
 
-      <div className="bg-white p-3">
-        <div className="text-sm text-gray-600">{subtitle ? "Unlocked" : "Unlocked"}</div>
+      {/* Bottom white strip */}
+      <div className="px-5 py-3 bg-white text-sm font-medium text-gray-700">
+        {locked ? "Locked — keep going!" : "Unlocked"}
       </div>
     </div>
   );

@@ -4,7 +4,6 @@ import "./globals.css";
 import Navigation from "../components/navigation";
 import { Analytics } from "@vercel/analytics/next";
 
-// Google fonts (keep these or remove if you don't want them)
 import {
   DM_Sans as V0_Font_DM_Sans,
   Space_Mono as V0_Font_Space_Mono,
@@ -34,21 +33,23 @@ export const metadata: Metadata = {
   description: "Fitness tracking made simple",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
       <body
         className={`${dmSans.variable} ${spaceMono.variable} ${sourceSerif.variable} font-sans antialiased bg-background`}
       >
-        {/* global navigation (shows on every page) */}
         <Navigation />
 
-        {/* main page wrapper */}
-        <main className="min-h-[calc(100vh-96px)] pt-6 pb-12">
+        {/* top padding so content clears fixed navbar on all devices */}
+        <main className="min-h-[calc(100vh-96px)] pt-24 md:pt-28 pb-12">
           {children}
         </main>
 
-        {/* analytics (optional) */}
         <Analytics />
       </body>
     </html>
