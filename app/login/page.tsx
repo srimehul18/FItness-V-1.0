@@ -47,18 +47,15 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
 
-    const origin =
-      typeof window !== "undefined" ? window.location.origin : undefined;
-
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: {
-        redirectTo: origin ? `${origin}/` : undefined,
-      },
+      // no redirectTo: Supabase will use your configured Site URL
     });
 
-    // For OAuth, Supabase usually redirects away; if there's an error it returns here
+    // For OAuth, Supabase will usually redirect away immediately.
+    // If there's an error, it returns here.
     if (error) {
+      console.error("Google OAuth error:", error);
       setLoading(false);
       setError(error.message);
     }

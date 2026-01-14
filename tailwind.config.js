@@ -28,8 +28,10 @@ module.exports = {
       colors: {
         
         primary: "#3b82f6",
-        accent: "#8b5cf6",
-      }
+        accent: "#f97316",
+        background: "#f3f4f6",
+        foreground: "#111827",
+      },
     },
   },
   plugins: [],
