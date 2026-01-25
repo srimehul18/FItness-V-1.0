@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Navigation from "../components/navigation";
 import { Analytics } from "@vercel/analytics/next";
+import { ThemeProvider } from "../components/theme-provider";
 
 import {
   DM_Sans as V0_Font_DM_Sans,
@@ -39,18 +40,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${dmSans.variable} ${spaceMono.variable} ${sourceSerif.variable} font-sans antialiased bg-background`}
       >
-        <Navigation />
+        <ThemeProvider>
+          <Navigation />
 
-        {/* top padding so content clears fixed navbar on all devices */}
-        <main className="min-h-[calc(100vh-96px)] pt-24 md:pt-28 pb-12">
-          {children}
-        </main>
+          {/* top padding so content clears fixed navbar on all devices */}
+          <main className="min-h-[calc(100vh-96px)] pt-24 md:pt-28 pb-12 transition-colors duration-300">
+            {children}
+          </main>
 
-        <Analytics />
+          <Analytics />
+        </ThemeProvider>
       </body>
     </html>
   );

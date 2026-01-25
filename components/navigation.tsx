@@ -8,6 +8,8 @@ import type { User } from "@supabase/supabase-js";
 import { Menu, X } from "lucide-react";
 import Logo from "./ui/logo";
 import { supabase } from "../lib/supabaseClient";
+import ThemeToggle from "./theme-toggle";
+
 
 const NAV_ITEMS: { href: string; label: string }[] = [
   { href: "/", label: "Home" },
@@ -78,9 +80,9 @@ export default function Navigation(): JSX.Element {
 </div>
 
         </Link>
-
         {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-3">
+        <ThemeToggle />
           {NAV_ITEMS.map((item) => {
             const isActive = pathname === item.href;
             return (
