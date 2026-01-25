@@ -1,26 +1,14 @@
 import React from "react";
 import { cn } from "./utils";
 
-interface CardProps {
+export const Card: React.FC<{
   className?: string;
   children?: React.ReactNode;
-}
-
-export const Card = ({ className, children }: CardProps) => {
+}> = ({ className, children }) => {
   return (
     <div
       className={cn(
-        `
-        rounded-2xl 
-        p-5 
-        transition-colors duration-300
-
-        bg-white text-slate-900 shadow-lg
-
-        dark:bg-[#050b1a] 
-        dark:text-slate-100 
-        dark:shadow-[0_0_30px_rgba(59,130,246,0.15)]
-        `,
+        "rounded-2xl bg-[rgb(var(--card))] shadow-xl border border-white/10 dark:border-blue-500/20 transition-colors",
         className
       )}
     >

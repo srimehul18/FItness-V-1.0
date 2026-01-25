@@ -10,6 +10,13 @@ import Logo from "./ui/logo";
 import { supabase } from "../lib/supabaseClient";
 import ThemeToggle from "./theme-toggle";
 
+<button
+  onClick={() => document.documentElement.classList.toggle("dark")}
+  className="px-3 py-2 rounded-full bg-blue-500 text-white text-sm"
+>
+  🌙
+</button>
+
 
 const NAV_ITEMS: { href: string; label: string }[] = [
   { href: "/", label: "Home" },
