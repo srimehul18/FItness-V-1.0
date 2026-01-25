@@ -40,10 +40,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className="bg-background text-foreground">
       <body
-        className={`${dmSans.variable} ${spaceMono.variable} ${sourceSerif.variable} font-sans antialiased bg-background`}
-      >
+    
+  className={`${dmSans.variable} ${spaceMono.variable} ${sourceSerif.variable} font-sans antialiased min-h-screen bg-background text-foreground transition-colors duration-300`}
+>
         <ThemeProvider>
           <Navigation />
 

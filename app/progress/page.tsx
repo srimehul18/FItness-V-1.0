@@ -9,6 +9,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
 } from "lucide-react";
+
 import {
   AreaChart,
   Area,
@@ -29,510 +30,230 @@ import { supabase } from "../../lib/supabaseClient";
 
 type WorkoutRow = {
   id: string;
-  // make sure this matches your column name in Supabase (change if needed)
   date: string;
   distance: number | null;
   calories: number | null;
 };
 
 type Growth =
-  | {
-      percent: number;
-      label: string;
-      isPositive: boolean;
-    }
+  | { percent: number; label: string; isPositive: boolean }
   | null;
-
-interface StatCardProps {
-  label: string;
-  value: string;
-  gradient: string;
-  growth: Growth;
-  icon: React.ReactNode;
-}
 
 function formatPercent(p: number) {
   if (!Number.isFinite(p)) return "0%";
   const abs = Math.abs(p);
-  if (abs >= 100) return `${p > 0 ? "+" : "-"}${abs.toFixed(0)}%`;
   return `${p > 0 ? "+" : p < 0 ? "-" : ""}${abs.toFixed(1)}%`;
 }
 
-function StatCard({ label, value, gradient, growth, icon }: StatCardProps) {
+function StatCard({ label, value, gradient, growth, icon }: any) {
   return (
-    <div className="rounded-2xl p-5 bg-gradient-to-br from-slate-900/5 to-slate-900/0 shadow-lg border border-white/40 backdrop-blur-md">
-      <div className="flex items-center justify-between mb-4">
+    <div className="rounded-2xl p-5 bg-card border border-border shadow-xl backdrop-blur">
+      <div className="flex justify-between mb-4">
         <div
-          className={`w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br ${gradient} shadow-md`}
+          className={`w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br ${gradient}`}
         >
           <span className="text-white">{icon}</span>
         </div>
+
         {growth && (
           <div
-            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
+            className={`px-2 py-1 rounded-full text-xs font-semibold ${
               growth.isPositive
-                ? "bg-emerald-500/10 text-emerald-500"
-                : "bg-rose-500/10 text-rose-500"
+                ? "text-emerald-400 bg-emerald-400/10"
+                : "text-rose-400 bg-rose-400/10"
             }`}
           >
-            {growth.isPositive ? (
-              <ArrowUpRight className="w-3 h-3" />
-            ) : (
-              <ArrowDownRight className="w-3 h-3" />
-            )}
-            <span>{formatPercent(growth.percent)}</span>
+            {growth.isPositive ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+            {formatPercent(growth.percent)}
           </div>
         )}
       </div>
-      <p className="text-xs font-medium text-slate-500">{label}</p>
-      <p className="mt-2 text-2xl font-bold text-slate-900">{value}</p>
-      {growth && (
-        <p className="mt-1 text-[11px] text-slate-500">{growth.label}</p>
-      )}
+
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-2xl font-bold text-foreground mt-1">{value}</p>
     </div>
   );
 }
 
 function ProgressContent() {
   const [workouts, setWorkouts] = useState<WorkoutRow[]>([]);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
-      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-      // uses the shared supabase client (already authenticated by AuthGuard)
-      const {
-  data: { user },
-  error: userError,
-} = await supabase.auth.getUser();
+      const { data } = await supabase
+        .from("workouts")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false });
 
-if (userError || !user) {
-  throw new Error("Not logged in");
-}
-
-const { data, error } = await supabase
-  .from("workouts")
-  .select("*")
-  .eq("user_id", user.id)      // 🔥 filter by user
-  .order("date", { ascending: false })
-  .limit(50);
-
-
-      if (error) {
-        console.error("Error loading workouts for progress page:", error);
-      } else if (data) {
-        setWorkouts(data as WorkoutRow[]);
-      }
-      setLoading(false);
+      setWorkouts((data ?? []) as WorkoutRow[]);
     }
 
     load();
   }, []);
 
   const stats = useMemo(() => {
-    if (!workouts.length) {
-      return {
-        totalDistance: 0,
-        totalCalories: 0,
-        totalWorkouts: 0,
-        avgPerWeek: 0,
-        monthly: [] as {
-          key: string;
-          label: string;
-          distance: number;
-          calories: number;
-          count: number;
-        }[],
-        growthDistance: null as Growth,
-        growthCalories: null as Growth,
-        growthWorkouts: null as Growth,
-        bestMonth: "—",
-        bestMonthDistance: 0,
-        avgPerWorkout: 0,
-        personalBestDistance: 0,
-      };
-    }
-
     let totalDistance = 0;
     let totalCalories = 0;
-    const monthlyMap = new Map<
-      string,
-      { label: string; distance: number; calories: number; count: number }
-    >();
 
-    let firstDate: Date | null = null;
-    let lastDate: Date | null = null;
-    let personalBestDistance = 0;
-
-    for (const w of workouts) {
-      const distance = w.distance ?? 0;
-      const calories = w.calories ?? 0;
-
-      totalDistance += distance;
-      totalCalories += calories;
-      personalBestDistance = Math.max(personalBestDistance, distance);
-
-      const d = new Date(w.date);
-      if (!firstDate || d < firstDate) firstDate = d;
-      if (!lastDate || d > lastDate) lastDate = d;
-
-      const year = d.getFullYear();
-      const monthIdx = d.getMonth(); // 0..11
-      const key = `${year}-${monthIdx}`;
-      const label = d.toLocaleDateString(undefined, {
-        month: "short",
-      });
-
-      const existing = monthlyMap.get(key);
-      if (existing) {
-        existing.distance += distance;
-        existing.calories += calories;
-        existing.count += 1;
-      } else {
-        monthlyMap.set(key, {
-          label,
-          distance,
-          calories,
-          count: 1,
-        });
-      }
-    }
-
-    const monthly = Array.from(monthlyMap.entries())
-      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
-      .map(([key, value]) => ({ key, ...value }))
-      .slice(-6); // last 6 months
-
-    const totalWorkouts = workouts.length;
-
-    // --- Growth vs last month ---
-    const len = monthly.length;
-    const current = len >= 1 ? monthly[len - 1] : null;
-    const previous = len >= 2 ? monthly[len - 2] : null;
-
-    const makeGrowth = (
-      currentValue: number,
-      previousValue: number,
-      label: string
-    ): Growth => {
-      if (!previous) return null;
-      const base = previousValue || 1; // avoid /0
-      const percent = ((currentValue - previousValue) / base) * 100;
-      return {
-        percent,
-        label,
-        isPositive: percent >= 0,
-      };
-    };
-
-    const growthDistance =
-      current && previous
-        ? makeGrowth(current.distance, previous.distance, "vs last month")
-        : null;
-    const growthCalories =
-      current && previous
-        ? makeGrowth(current.calories, previous.calories, "vs last month")
-        : null;
-    const growthWorkouts =
-      current && previous
-        ? makeGrowth(current.count, previous.count, "vs last month")
-        : null;
-
-    // --- Avg per week ---
-    let avgPerWeek = 0;
-    if (firstDate && lastDate) {
-      const diffDays =
-        (lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24);
-      const weeks = Math.max(diffDays / 7, 1);
-      avgPerWeek = totalDistance / weeks;
-    }
-
-    // --- Insights ---
-    let bestMonth = "—";
-    let bestMonthDistance = 0;
-    for (const m of monthly) {
-      if (m.distance > bestMonthDistance) {
-        bestMonthDistance = m.distance;
-        bestMonth = m.label;
-      }
-    }
-
-    const avgPerWorkout =
-      totalWorkouts > 0 ? totalDistance / totalWorkouts : 0;
+    workouts.forEach(w => {
+      totalDistance += w.distance ?? 0;
+      totalCalories += w.calories ?? 0;
+    });
 
     return {
       totalDistance,
       totalCalories,
-      totalWorkouts,
-      avgPerWeek,
-      monthly,
-      growthDistance,
-      growthCalories,
-      growthWorkouts,
-      bestMonth,
-      bestMonthDistance,
-      avgPerWorkout,
-      personalBestDistance,
+      totalWorkouts: workouts.length,
+      avgPerWeek: totalDistance / 4 || 0,
     };
   }, [workouts]);
 
-  const distanceData = stats.monthly.map((m) => ({
-    month: m.label,
-    distance: Number(m.distance.toFixed(1)),
-  }));
+  const chartData = workouts
+    .slice(0, 6)
+    .reverse()
+    .map(w => ({
+      date: new Date(w.date).toLocaleDateString(undefined, { month: "short" }),
+      distance: w.distance ?? 0,
+      calories: w.calories ?? 0,
+    }));
 
-  const caloriesData = stats.monthly.map((m) => ({
-    month: m.label,
-    calories: Math.round(m.calories),
-  }));
-
-  const workoutsData = stats.monthly.map((m) => ({
-    month: m.label,
-    count: m.count,
-  }));
+  const gridColor = "rgba(148,163,184,0.2)"; // soft neon grid
 
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-        {/* Header */}
-        <div className="flex items-center justify-between gap-4">
+
+        {/* HEADER */}
+        <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-2">
-              Your Progress
-            </h1>
-            <p className="text-slate-500">
-              Track your improvement and celebrate milestones.
+            <h1 className="text-4xl font-bold text-foreground">Your Progress</h1>
+            <p className="text-muted-foreground">
+              Track growth with neon insights ⚡
             </p>
           </div>
-          <Button
-            className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg rounded-full px-5"
-            size="lg"
-          >
-            <Activity className="w-4 h-4 mr-2" />
+
+          <Button className="rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 shadow-lg">
+            <Activity size={16} className="mr-2" />
             Log Workout
           </Button>
         </div>
 
-        {/* Top stat cards */}
+        {/* STATS */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           <StatCard
             label="Total Distance"
             value={`${stats.totalDistance.toFixed(1)} km`}
-            gradient="from-blue-500 to-indigo-500"
-            growth={stats.growthDistance}
-            icon={<Target className="w-5 h-5" />}
+            gradient="from-blue-500 to-cyan-500"
+            icon={<Target size={18} />}
           />
+
           <StatCard
             label="Calories Burned"
-            value={`${Math.round(stats.totalCalories).toLocaleString()} kcal`}
+            value={`${Math.round(stats.totalCalories)} kcal`}
             gradient="from-orange-500 to-red-500"
-            growth={stats.growthCalories}
-            icon={<Flame className="w-5 h-5" />}
+            icon={<Flame size={18} />}
           />
+
           <StatCard
             label="Total Workouts"
-            value={stats.totalWorkouts.toString()}
+            value={stats.totalWorkouts}
             gradient="from-purple-500 to-pink-500"
-            growth={stats.growthWorkouts}
-            icon={<BarChart3 className="w-5 h-5" />}
+            icon={<BarChart3 size={18} />}
           />
+
           <StatCard
-            label="Avg. Distance / Week"
+            label="Avg / Week"
             value={`${stats.avgPerWeek.toFixed(1)} km`}
             gradient="from-emerald-500 to-teal-500"
-            growth={null}
-            icon={<Activity className="w-5 h-5" />}
+            icon={<Activity size={18} />}
           />
         </div>
 
-        {/* Big distance chart */}
-        <div className="bg-card rounded-2xl p-6 shadow-lg border border-slate-200">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">
-                Total Distance (km)
-              </h2>
-              <p className="text-xs text-slate-500">
-                Steady progress towards your goals
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs text-slate-400">This period</p>
-              <p className="text-lg font-semibold text-slate-900">
-                {stats.totalDistance.toFixed(1)} km
-              </p>
-            </div>
-          </div>
+        {/* DISTANCE CHART */}
+        <div className="bg-card rounded-2xl p-6 border border-border shadow-xl">
+          <h2 className="text-lg font-semibold text-foreground mb-4">
+            Distance Growth
+          </h2>
+
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={distanceData}>
-                <defs>
-                  <linearGradient id="distanceGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.9} />
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="month" stroke="#9ca3af" />
-                <YAxis stroke="#9ca3af" />
+              <AreaChart data={chartData}>
+                <CartesianGrid stroke={gridColor} strokeDasharray="3 3" />
+                <XAxis dataKey="date" stroke="#94a3b8" />
+                <YAxis stroke="#94a3b8" />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: "white",
+                    background: "#020617",
+                    border: "1px solid #38bdf8",
                     borderRadius: 12,
-                    border: "1px solid #e5e7eb",
-                    fontSize: 12,
+                    color: "#e5e7eb",
                   }}
                 />
                 <Area
-                  type="monotone"
                   dataKey="distance"
-                  stroke="#2563eb"
+                  stroke="#38bdf8"
                   strokeWidth={3}
-                  fill="url(#distanceGradient)"
-                  dot={{ r: 4 }}
-                  activeDot={{ r: 6 }}
+                  fill="rgba(56,189,248,0.2)"
                 />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Lower charts row */}
+        {/* LOWER CHARTS */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Calories chart */}
-          <div className="bg-card rounded-2xl p-6 shadow-lg border border-slate-200">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">
-                  Calories Burned
-                </h2>
-                <p className="text-xs text-slate-500">Monthly trend</p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-slate-400">This period</p>
-                <p className="text-lg font-semibold text-orange-500">
-                  {Math.round(stats.totalCalories).toLocaleString()} kcal
-                </p>
-              </div>
-            </div>
+
+          <div className="bg-card rounded-2xl p-6 border border-border shadow-xl">
+            <h2 className="text-foreground font-semibold mb-3">
+              Calories Trend
+            </h2>
+
             <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={caloriesData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="month" stroke="#9ca3af" />
-                  <YAxis stroke="#9ca3af" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "white",
-                      borderRadius: 12,
-                      border: "1px solid #e5e7eb",
-                      fontSize: 12,
-                    }}
-                  />
+                <LineChart data={chartData}>
+                  <CartesianGrid stroke={gridColor} />
+                  <XAxis dataKey="date" stroke="#94a3b8" />
+                  <YAxis stroke="#94a3b8" />
+                  <Tooltip contentStyle={{ background: "#020617", color: "#fff" }} />
                   <Line
                     type="monotone"
                     dataKey="calories"
-                    stroke="#f97316"
+                    stroke="#fb923c"
                     strokeWidth={3}
-                    dot={{ r: 4 }}
-                    activeDot={{ r: 6 }}
                   />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          {/* Workouts per month */}
-          <div className="bg-card rounded-2xl p-6 shadow-lg border border-slate-200">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">
-                  Workouts Per Month
-                </h2>
-                <p className="text-xs text-slate-500">Consistency tracking</p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-slate-400">Total workouts</p>
-                <p className="text-lg font-semibold text-purple-500">
-                  {stats.totalWorkouts}
-                </p>
-              </div>
-            </div>
+          <div className="bg-card rounded-2xl p-6 border border-border shadow-xl">
+            <h2 className="text-foreground font-semibold mb-3">
+              Workouts
+            </h2>
+
             <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
-                <ReBarChart data={workoutsData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="month" stroke="#9ca3af" />
-                  <YAxis stroke="#9ca3af" allowDecimals={false} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "white",
-                      borderRadius: 12,
-                      border: "1px solid #e5e7eb",
-                      fontSize: 12,
-                    }}
-                  />
-                  <Bar dataKey="count" fill="#111827" radius={[8, 8, 4, 4]} />
+                <ReBarChart data={chartData}>
+                  <CartesianGrid stroke={gridColor} />
+                  <XAxis dataKey="date" stroke="#94a3b8" />
+                  <YAxis stroke="#94a3b8" />
+                  <Tooltip contentStyle={{ background: "#020617", color: "#fff" }} />
+                  <Bar dataKey="distance" fill="#38bdf8" radius={[6,6,0,0]} />
                 </ReBarChart>
               </ResponsiveContainer>
             </div>
           </div>
-        </div>
 
-        {/* Key insights */}
-        <div className="bg-card rounded-2xl p-6 shadow-lg border border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900 mb-4">
-            Key Insights
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="rounded-xl bg-blue-50 p-4 border border-blue-100">
-              <p className="text-xs font-semibold text-blue-700 mb-1">
-                Best Month
-              </p>
-              <p className="text-lg font-bold text-blue-900">
-                {stats.bestMonth}
-              </p>
-              <p className="text-xs text-blue-600 mt-1">
-                {stats.bestMonthDistance.toFixed(1)} km in your top month
-              </p>
-            </div>
-            <div className="rounded-xl bg-emerald-50 p-4 border border-emerald-100">
-              <p className="text-xs font-semibold text-emerald-700 mb-1">
-                Average per Workout
-              </p>
-              <p className="text-lg font-bold text-emerald-900">
-                {stats.avgPerWorkout.toFixed(1)} km
-              </p>
-              <p className="text-xs text-emerald-600 mt-1">
-                Distance covered each session on average
-              </p>
-            </div>
-            <div className="rounded-xl bg-purple-50 p-4 border border-purple-100">
-              <p className="text-xs font-semibold text-purple-700 mb-1">
-                Personal Best
-              </p>
-              <p className="text-lg font-bold text-purple-900">
-                {stats.personalBestDistance.toFixed(1)} km
-              </p>
-              <p className="text-xs text-purple-600 mt-1">
-                Your longest recorded workout in one session
-              </p>
-            </div>
-          </div>
         </div>
-
-        {loading && (
-          <p className="text-xs text-slate-400 text-center">
-            Loading your progress…
-          </p>
-        )}
       </div>
     </div>
   );
 }
 
-// 👇 This is what actually gets exported for the /progress route
 export default function ProgressPage() {
   return (
     <AuthGuard>
