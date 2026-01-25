@@ -1,12 +1,7 @@
 ﻿"use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  Activity,
-  Flame,
-  Target,
-  BarChart3,
-} from "lucide-react";
+import { Activity, Flame, Target, BarChart3 } from "lucide-react";
 
 import {
   AreaChart,
@@ -45,15 +40,15 @@ function StatCard({
   icon: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl p-5 bg-[#020617] border border-cyan-500/20 shadow-[0_0_20px_rgba(56,189,248,0.15)]">
+    <div className="rounded-2xl p-5 bg-card border border-border shadow-lg dark:shadow-[0_0_20px_rgba(56,189,248,0.18)]">
       <div
         className={`w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br ${gradient} mb-3`}
       >
         <span className="text-white">{icon}</span>
       </div>
 
-      <p className="text-xs text-slate-400">{label}</p>
-      <p className="text-2xl font-bold text-white mt-1">{value}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-2xl font-bold text-foreground mt-1">{value}</p>
     </div>
   );
 }
@@ -104,22 +99,20 @@ function ProgressContent() {
       calories: w.calories ?? 0,
     }));
 
-  const grid = "rgba(56,189,248,0.15)";
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-[#020617] to-[#020617] text-white">
+    <div className="min-h-screen bg-background text-foreground">
       <div className="max-w-7xl mx-auto px-4 py-10 space-y-10">
 
         {/* HEADER */}
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-4xl font-bold text-white">Your Progress</h1>
-            <p className="text-slate-400">
+            <h1 className="text-4xl font-bold">Your Progress</h1>
+            <p className="text-muted-foreground">
               Track growth with neon insights ⚡
             </p>
           </div>
 
-          <Button className="rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 shadow-[0_0_20px_rgba(56,189,248,0.6)]">
+          <Button className="rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 shadow-lg dark:shadow-[0_0_18px_rgba(56,189,248,0.6)]">
             <Activity size={16} className="mr-2" />
             Log Workout
           </Button>
@@ -157,20 +150,20 @@ function ProgressContent() {
         </div>
 
         {/* DISTANCE CHART */}
-        <div className="bg-[#020617] rounded-2xl p-6 border border-cyan-500/20 shadow-[0_0_30px_rgba(56,189,248,0.15)]">
+        <div className="bg-card rounded-2xl p-6 border border-border shadow-lg dark:shadow-[0_0_30px_rgba(56,189,248,0.18)]">
           <h2 className="text-lg font-semibold mb-4">Distance Growth</h2>
 
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData}>
-                <CartesianGrid stroke={grid} strokeDasharray="3 3" />
+                <CartesianGrid stroke="rgba(148,163,184,0.2)" strokeDasharray="3 3" />
                 <XAxis dataKey="month" stroke="#94a3b8" />
                 <YAxis stroke="#94a3b8" />
                 <Tooltip
                   contentStyle={{
-                    background: "#020617",
-                    border: "1px solid #38bdf8",
-                    color: "#fff",
+                    background: "var(--card)",
+                    border: "1px solid rgba(148,163,184,.3)",
+                    color: "var(--foreground)",
                     borderRadius: 10,
                   }}
                 />
@@ -188,16 +181,16 @@ function ProgressContent() {
         {/* LOWER CHARTS */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-          <div className="bg-[#020617] rounded-2xl p-6 border border-cyan-500/20 shadow-[0_0_30px_rgba(56,189,248,0.15)]">
+          <div className="bg-card rounded-2xl p-6 border border-border shadow-lg dark:shadow-[0_0_30px_rgba(56,189,248,0.18)]">
             <h2 className="font-semibold mb-3">Calories Trend</h2>
 
             <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData}>
-                  <CartesianGrid stroke={grid} />
+                  <CartesianGrid stroke="rgba(148,163,184,0.2)" />
                   <XAxis dataKey="month" stroke="#94a3b8" />
                   <YAxis stroke="#94a3b8" />
-                  <Tooltip contentStyle={{ background: "#020617", color: "#fff" }} />
+                  <Tooltip contentStyle={{ background: "var(--card)", color: "var(--foreground)" }} />
                   <Line
                     type="monotone"
                     dataKey="calories"
@@ -209,16 +202,16 @@ function ProgressContent() {
             </div>
           </div>
 
-          <div className="bg-[#020617] rounded-2xl p-6 border border-cyan-500/20 shadow-[0_0_30px_rgba(56,189,248,0.15)]">
+          <div className="bg-card rounded-2xl p-6 border border-border shadow-lg dark:shadow-[0_0_30px_rgba(56,189,248,0.18)]">
             <h2 className="font-semibold mb-3">Workouts</h2>
 
             <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
                 <ReBarChart data={chartData}>
-                  <CartesianGrid stroke={grid} />
+                  <CartesianGrid stroke="rgba(148,163,184,0.2)" />
                   <XAxis dataKey="month" stroke="#94a3b8" />
                   <YAxis stroke="#94a3b8" />
-                  <Tooltip contentStyle={{ background: "#020617", color: "#fff" }} />
+                  <Tooltip contentStyle={{ background: "var(--card)", color: "var(--foreground)" }} />
                   <Bar
                     dataKey="distance"
                     fill="#38bdf8"

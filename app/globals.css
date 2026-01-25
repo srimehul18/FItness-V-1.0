@@ -9,10 +9,22 @@
 }
 
 .dark {
-  --bg: 2 6 23;        /* deep blue-black */
-  --card: 8 15 40;     /* neon dark panels */
-  --text: 226 232 240; /* soft white */
+  --background: #020617;        /* deep black-blue */
+  --foreground: #e5e7eb;
+
+  --card: #020b1f;
+  --card-foreground: #e5e7eb;
+
+  --border: #1e293b;
+  --muted: #0b1228;
+  --muted-foreground: #94a3b8;
+
+  --primary: #38bdf8;          /* neon cyan */
+  --accent: #60a5fa;
+
+  --ring: #38bdf8;
 }
+
 
 body {
   background-color: rgb(var(--bg));
